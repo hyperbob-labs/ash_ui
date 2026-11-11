@@ -339,7 +339,7 @@ defmodule AshUi.ViewConstructor do
   end
 
   defp load_spec(%Compiled{} = compiled, view_exprs, resource, rendered_resources) do
-    bindings = binding_relationships(compiled.ir, resource)
+    bindings = collect_binding_relationships(compiled.ir, %{}, resource)
     deps = transitive_deps(compiled, view_exprs)
 
     (deps ++
@@ -424,8 +424,11 @@ defmodule AshUi.ViewConstructor do
 
   defp declared_load_relationship_deps(_calculation, _resource), do: []
 
-  def binding_relationships(ir, resource \\ nil),
-    do: collect_binding_relationships(ir, %{}, resource)
+  def binding_relationships(ir, resource \\ nil) do
+    ir
+    |> collect_binding_relationships(%{}, resource)
+    |> Map.new(fn {as, [path | _]} -> {as, path} end)
+  end
 
   defp lower_child_container(children) do
     children = lower_children(children)
@@ -1156,20 +1159,26 @@ defmodule AshUi.ViewConstructor do
 
   defp maybe_put_binding_relationship(acc, as, resource, [relationship | _rest] = path) do
     if relationship_field?(resource, relationship) do
-      Map.put_new(acc, as, path)
+      # one binder name may stand for the items of several lists of a view (`each :open_jobs, :job`,
+      # `each :booked_jobs, :job`): every path is kept, not only the first
+      Map.update(acc, as, [path], fn paths -> if path in paths, do: paths, else: paths ++ [path] end)
     else
       acc
     end
   end
 
   defp maybe_put_nested_binding_relationship(acc, as, parent_binding, path) do
-    case Map.get(acc, parent_binding) do
-      [_relationship | _rest] = parent_path ->
-        Map.put_new(acc, as, parent_path ++ List.wrap(path))
+    # the parent binder may stand for several lists: the nested list is nested under each of them
+    acc
+    |> Map.get(parent_binding, [])
+    |> Enum.reduce(acc, fn
+      [_relationship | _rest] = parent_path, acc ->
+        nested = parent_path ++ List.wrap(path)
+        Map.update(acc, as, [nested], fn paths -> if nested in paths, do: paths, else: paths ++ [nested] end)
 
-      _other ->
+      _other, acc ->
         acc
-    end
+    end)
   end
 
   defp transitive_deps(%Compiled{} = compiled, view_exprs) do
@@ -1346,16 +1355,22 @@ defmodule AshUi.ViewConstructor do
         end
 
       {:item, [binding, field]}, acc ->
-        put_binding_field_load(acc, Map.get(bindings, binding), field)
+        put_binding_paths_field_load(acc, Map.get(bindings, binding), field)
 
       {:item, binding, field}, acc ->
-        put_binding_field_load(acc, Map.get(bindings, binding), field)
+        put_binding_paths_field_load(acc, Map.get(bindings, binding), field)
 
       _other, acc ->
         acc
     end)
     |> load_acc_to_spec(resource)
   end
+
+  defp put_binding_paths_field_load(acc, paths, field) when is_list(paths) do
+    Enum.reduce(paths, acc, &put_binding_field_load(&2, &1, field))
+  end
+
+  defp put_binding_paths_field_load(acc, _paths, _field), do: acc
 
   defp put_binding_field_load(acc, [relationship | path], field) do
     put_relationship_path(acc, relationship, path ++ List.wrap(field))
