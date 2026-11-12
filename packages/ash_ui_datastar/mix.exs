@@ -28,7 +28,7 @@ defmodule AshUiDatastar.MixProject do
 
   defp deps do
     [
-      {:ash, "~> 3.36"},
+      {:ash, ash_version("~> 3.36")},
       # TEST-ONLY: LiveView is the executable oracle for the copied
       # AshUi.Diff kernel — never a runtime dependency here.
       sibling(:ash_ui_phoenix, "../ash_ui_phoenix", only: :test),
@@ -70,6 +70,16 @@ defmodule AshUiDatastar.MixProject do
     if System.get_env("ASH_UI_HEX"),
       do: {app, "~> 0.1.0", opts},
       else: {app, Keyword.put(opts, :path, path)}
+  end
+
+  # The Ash the root project builds against (its mix.exs: ASH_VERSION, the Ash fork beside the checkout by default).
+  defp ash_version(default_version) do
+    case System.get_env("ASH_VERSION", "local") do
+      "local" -> [path: "../../../ash", override: true]
+      "hex" -> default_version
+      "main" -> [git: "https://github.com/ash-project/ash.git", override: true]
+      version -> "~> #{version}"
+    end
   end
 
   defp docs do
