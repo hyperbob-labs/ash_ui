@@ -353,7 +353,8 @@ defmodule AshUi.Datastar.Bridge do
                 current,
                 updated,
                 updated_owner,
-                reload_paths
+                reload_paths,
+                echo
               )
             end)
 
@@ -949,7 +950,7 @@ defmodule AshUi.Datastar.Bridge do
     |> Enum.any?(fn attribute -> Map.get(old, attribute.name) != Map.get(new, attribute.name) end)
   end
 
-  defp dispatch_changed_addresses(table, current, updated, updated_owner, reload_paths) do
+  defp dispatch_changed_addresses(table, current, updated, updated_owner, reload_paths, echo) do
     reload_paths =
       reload_paths
       |> Enum.filter(&match?([root | _rest] when is_atom(root), &1))
@@ -957,9 +958,24 @@ defmodule AshUi.Datastar.Bridge do
 
     root_dispatch? = AshUi.Reload.same_row?(current, updated_owner)
 
-    if root_dispatch? and reload_paths != [] and
+    if root_dispatch? and reload_paths != [] and echo != :root and
          not root_attributes_changed?(current, updated) do
-      AshUi.Patch.Runtime.changed_addresses_for_paths(table, reload_paths)
+      # The echo names what the action's writes changed beyond the binding's
+      # own paths (a relationship read again because the action wrote its
+      # destination): the nodes that read those paths, or a root derived from
+      # them, are changed too, wherever they sit on the page (as the LiveView
+      # bridge's `put_record/5` widens its changed paths).
+      echo_paths = Enum.filter(echo, &match?([root | _rest] when is_atom(root), &1))
+
+      paths =
+        (reload_paths ++
+           echo_paths ++
+           (current.__struct__
+            |> AshUi.Reload.dependent_roots_for_paths(echo_paths)
+            |> Enum.map(&[&1])))
+        |> Enum.uniq()
+
+      AshUi.Patch.Runtime.changed_addresses_for_paths(table, paths)
     else
       AshUi.Patch.Runtime.changed_addresses(table, current, updated)
     end
