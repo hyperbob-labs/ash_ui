@@ -25,7 +25,9 @@ defmodule AshUi.Reload do
   Dependency narrowing derives from declarations, never from code:
 
     * A declarative relationship depends on its `source_attribute` and any
-      root attribute referenced through `parent(...)` in its filter.
+      root attribute referenced through `parent(...)` in its filter. A
+      `has_many` window also depends on the attributes its read action's
+      arguments are bound from, its `sort_by` and its `offset` or `after`.
     * A `manual` relationship's read is opaque; it conservatively depends on
       every attribute unless the declaration names its dependency set:
       `manual {MyRel, depends_on: [:sort_by, :q]}` (an empty list is a valid
@@ -230,14 +232,26 @@ defmodule AshUi.Reload do
   end
 
   # A no_attributes? relationship joins through nothing — its filter's
-  # parent() refs are the entire attribute dependency.
+  # parent() refs, and its window's source attributes, are the entire
+  # attribute dependency.
   defp declared_relationship_dep(relationship) do
     source =
       if Map.get(relationship, :no_attributes?), do: nil, else: relationship.source_attribute
 
     [source | parent_attribute_refs(relationship.filter)]
+    |> Enum.concat(window_attribute_refs(Map.get(relationship, :window)))
     |> Enum.reject(&is_nil/1)
     |> attributes_dep()
+  end
+
+  # A window (`has_many ... window`) reads its relationship's action with
+  # arguments, a sort and a position taken from the source record: the
+  # attributes its arguments are bound from (`parent:`), its `sort_by`, and
+  # its `offset` or `after` cursor.
+  defp window_attribute_refs(nil), do: []
+
+  defp window_attribute_refs(window) do
+    [window.sort_by, window.offset, window.after | Enum.map(window.arguments, & &1.parent)]
   end
 
   defp manual_dep({_module, opts}) when is_list(opts) do
