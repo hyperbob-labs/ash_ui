@@ -26,6 +26,10 @@ defmodule AshUi.Notification.DerivedReads do
   relationship on the record.
   """
 
+  # `key` names the derived field by its path from the page row
+  # (`prefix ++ [field]`): an adapter's subscription ref is the record and the
+  # key, and one record the page loads under two paths needs a subscription,
+  # and a reload scope, under each.
   @type edge :: %{
           key: term(),
           resource: module(),
@@ -85,7 +89,7 @@ defmodule AshUi.Notification.DerivedReads do
           else
             [
               %{
-                key: {:derived_read, field, read, 0},
+                key: {:derived_read, prefix ++ [field], read, 0},
                 resource: relationship.destination,
                 attrs: index_attrs(record, relationship),
                 filter: Map.get(relationship, :filter),
@@ -118,7 +122,7 @@ defmodule AshUi.Notification.DerivedReads do
 
   defp resource_edge(field, read, depth, resource, prefix) do
     %{
-      key: {:derived_read, field, read, depth},
+      key: {:derived_read, prefix ++ [field], read, depth},
       resource: resource,
       attrs: [],
       filter: nil,
