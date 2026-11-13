@@ -931,8 +931,11 @@ defmodule AshUi.Notification.MatchIndex do
     [new_record, old_record]
     |> Enum.reject(&is_nil/1)
     |> Enum.reduce_while(false, fn record, _matched? ->
-      case Ash.Filter.Runtime.filter_matches(domain, [record], filter,
-             parent: Map.get(subscription, :parent)
+      case Ash.Filter.Runtime.filter_matches(
+             domain,
+             [record],
+             filter,
+             stage2_options(subscription)
            ) do
         {:ok, [_record]} -> {:halt, true}
         {:ok, []} -> {:cont, false}
@@ -942,4 +945,20 @@ defmodule AshUi.Notification.MatchIndex do
   end
 
   defp stage2_hit?(_subscription, _new_record, _old_record), do: true
+
+  # Fork option (leanbob correspondence: `MatchIndex.Subscription.actor`): a
+  # subscription may carry its session's `actor`, and the filter is then
+  # evaluated as that actor. `filter_matches` loads the relationships the
+  # filter walks with it, so a relationship whose own filter compares the actor
+  # (a viewer's own role rows) loads as the page's read loaded it. Without it
+  # that relationship loads empty and the filter never matches. A
+  # subscription without the key is evaluated exactly as upstream evaluates it.
+  defp stage2_options(subscription) do
+    options = [parent: Map.get(subscription, :parent)]
+
+    case Map.fetch(subscription, :actor) do
+      {:ok, actor} -> Keyword.put(options, :actor, actor)
+      :error -> options
+    end
+  end
 end

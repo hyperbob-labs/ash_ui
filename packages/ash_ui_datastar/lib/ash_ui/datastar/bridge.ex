@@ -1546,6 +1546,19 @@ defmodule AshUi.Datastar.Bridge do
       tenant: state.tenant,
       domain: domain(resource)
     }
+    |> notification_actor(state)
+  end
+
+  # Fork option (MatchIndex `:actor`; leanbob `MatchIndex.Subscription.actor`,
+  # set in `PageSession.notification_subscription`): the session's actor, so
+  # the filter's relationships load as the page's read loaded them. A filter
+  # through a relationship whose own filter compares the actor otherwise
+  # loads it empty and never matches. No actor, no key: upstream's subscription.
+  defp notification_actor(subscription, state) do
+    case Map.get(state, :actor) do
+      nil -> subscription
+      actor -> Map.put(subscription, :actor, actor)
+    end
   end
 
   # The filter as the page's read applied it: its templates (`^actor(...)`,
