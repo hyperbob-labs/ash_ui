@@ -1517,12 +1517,22 @@ defmodule AshUi.Datastar.Bridge do
 
   defp recurse_notification_relationships?(_resource, :unknown), do: true
 
+  # The walk goes under a record whose load loads a relationship, or a
+  # calculation or aggregate that derives from other rows: the record's
+  # derived-read subscriptions are taken when it is walked
+  # (`derived_read_subscriptions/5`), so a record loaded with derived fields
+  # alone (a page's portfolio and its risk count) is walked too.
   defp recurse_notification_relationships?(resource, {:known, load}) do
     Enum.any?(load, fn
-      {field, _nested} -> not is_nil(Ash.Resource.Info.relationship(resource, field))
-      field when is_atom(field) -> not is_nil(Ash.Resource.Info.relationship(resource, field))
+      {field, _nested} -> walked_field?(resource, field)
+      field when is_atom(field) -> walked_field?(resource, field)
       _other -> false
     end)
+  end
+
+  defp walked_field?(resource, field) do
+    not is_nil(Ash.Resource.Info.relationship(resource, field)) or
+      AshUi.Reload.derived_reads(resource, field) != []
   end
 
   defp notification_subscription(resource, attrs, filter, parent, state, reload_scope) do
