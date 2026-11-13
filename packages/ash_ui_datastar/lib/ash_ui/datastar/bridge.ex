@@ -1530,12 +1530,27 @@ defmodule AshUi.Datastar.Bridge do
       pid: self(),
       resource: resource,
       attrs: attrs,
-      filter: filter,
+      filter: notification_filter(filter, state),
       parent: notification_filter_parent(filter, parent),
       reload_scope: reload_scope,
       tenant: state.tenant,
       domain: domain(resource)
     }
+  end
+
+  # The filter as the page's read applied it: its templates (`^actor(...)`,
+  # `^tenant()`, `^context(...)`) filled with the session's scope. Left as
+  # templates, `Ash.Filter.Runtime` resolves `{:_actor, _}` to `:unknown`, so a
+  # relationship or aggregate filtered on the actor never matched a notification
+  # and the page kept the value it read before the action.
+  defp notification_filter(filter, _state) when filter in [nil, []], do: filter
+
+  defp notification_filter(filter, state) do
+    Ash.Expr.fill_template(filter,
+      actor: Map.get(state, :actor),
+      tenant: Map.get(state, :tenant),
+      context: Map.get(state, :context) || %{}
+    )
   end
 
   defp notification_filter_parent(filter, _parent) when filter in [nil, []], do: nil
