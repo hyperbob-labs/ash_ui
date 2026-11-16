@@ -1628,6 +1628,16 @@ defmodule AshUi.Phoenix do
   end
 
   defp notification_subscription(resource, attrs, filter, parent, socket, reload_scope) do
+    tenant = socket.assigns[:ash_ui_tenant]
+
+    filter =
+      filter &&
+        Ash.Expr.fill_template(filter,
+          actor: socket.assigns[:ash_ui_actor],
+          tenant: tenant && Ash.ToTenant.to_tenant(tenant, resource),
+          context: socket.assigns[:ash_ui_context] || %{}
+        )
+
     %{
       pid: self(),
       resource: resource,
