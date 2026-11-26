@@ -123,6 +123,8 @@ defmodule AshUi.Session do
   end
 
   defp cleanup_changeset(resource, domain, tenant, actor) do
+    tenant = tenant && Ash.ToTenant.to_tenant(tenant, resource)
+
     %Ash.Changeset{
       resource: resource,
       domain: domain,
@@ -231,7 +233,7 @@ defmodule AshUi.Session do
   defp maybe_set_ets_tenant(_resource, query, nil), do: {:ok, query}
 
   defp maybe_set_ets_tenant(resource, query, tenant),
-    do: Ash.DataLayer.Ets.set_tenant(resource, query, tenant)
+    do: Ash.DataLayer.Ets.set_tenant(resource, query, Ash.ToTenant.to_tenant(tenant, resource))
 
   defp maybe_put_kw(opts, _key, nil), do: opts
   defp maybe_put_kw(opts, key, value), do: Keyword.put(opts, key, value)
